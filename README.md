@@ -1,44 +1,37 @@
-# GrowthLife Product Importer (Shopify app)
+# GrowthLife Product Importer
 
-Bulk import, export and edit every Shopify product from one screen.
+A free Shopify app for bulk importing, exporting and editing every product from one screen.
+
+**It doesn't need a server, a database or an API secret.** The app is a static page hosted on GitHub Pages. Shopify loads it inside the admin, and App Bridge [Direct API access](https://shopify.dev/docs/api/app-bridge-library#direct-api-access) lets it call the Shopify Admin API straight from the browser.
 
 ## Features
-- **All Products page**: every product on one page with thumbnail, status, sale price / MRP, stock, variants and a completeness score.
-  - Search by title, handle, vendor, type or tag.
-  - Tabs: All · ✓ Complete · Needs details · Active · Draft · Archived, plus a "Missing: …" filter (for example, missing images or SEO description).
-  - Click a product to open a **popup editor** where you can edit everything: title, HTML description, handle, status, vendor, type, tags, collections (and create new ones), SEO meta title/description with a Google preview, metafields and attributes, options (Size/Color/…), an auto-generated variant grid (sale price, MRP, cost, qty, SKU, barcode, weight, variant image), images (drag & drop upload, add by URL, reorder, set thumbnail, alt text), tax, shipping and sell-when-out-of-stock.
-- **Export** to `.xlsx` (or `.csv`) with all data: a title banner, a how-to row, colour-coded headers, a help row explaining every column, dropdowns and a *Guide* sheet. Optional thumbnail pictures are embedded in the Excel file.
-- **Import** `.xlsx` / `.csv` (Shopify's own product CSV works too). Existing handles are updated and new handles are created, including variants, options, sale price, MRP, cost, stock, SKU, barcode, weight, collections (missing ones are created), tags, SEO, metafields and images.
-  - Images can be URLs (the first one is the thumbnail) **or pictures pasted into the Excel sheet** ("Paste Images Here" column; both floating pictures and Excel 365 *Place in Cell* pictures are supported). They are uploaded to Shopify automatically.
-  - Shows a preview with warnings, runs in batches with a progress bar, and lets you download a result report.
-- **Bulk image upload**: drop hundreds of images named by handle or SKU (`red-shirt.jpg`, `red-shirt_2.jpg`, `TS-M-RED.png`), and they are added to the matching products.
-- Active products are published to the Online Store sales channel automatically.
+- **All Products page:** every product on one page with thumbnail, status, sale price / MRP, stock, variants and a completeness score.
+  - Search, tabs (All · ✓ Complete · Needs details · Active · Draft · Archived) and a "Missing: …" filter.
+  - Click a product to edit everything in one popup: title, HTML description, handle, status, vendor, type, tags, collections (new ones are created), SEO meta with a Google preview, metafields, options, and a variant grid (sale price, MRP, cost, qty, SKU, barcode, weight, variant image). You can also upload, reorder and set the thumbnail image, add alt text, and set tax / shipping / sell-when-out-of-stock.
+- **Export:** `.xlsx` or `.csv` with every product field. The file has a title row, a how-to row, colour-coded headers, a help row for each column, dropdowns and a *Guide* sheet. Thumbnails in Excel are optional.
+- **Import:** `.xlsx` / `.csv` (Shopify's CSV format also works). Existing handles are updated and new ones are created, with variants, options, prices, stock, collections, tags, SEO, metafields and images.
+  - Images can be URLs, or **pictures pasted inside Excel** (floating or *Place in Cell*).
+- **Bulk image upload:** drop images named by handle or SKU (`red-shirt.jpg`, `red-shirt_2.jpg`, `TS-M-RED.png`).
 
-## Run it (first time)
+## How it's deployed
+- `main` branch → GitHub Actions (`.github/workflows/pages.yml`) runs the tests, builds and publishes to GitHub Pages.
+- Shopify app config: `shopify.app.toml` (App URL = the Pages URL, `[access.admin] embedded_app_direct_api_access = true`).
+- The public Client ID is in `.env` (`VITE_SHOPIFY_API_KEY`). It isn't a secret.
+
+## Develop
 ```bash
 npm install
-npm run dev          # shopify app dev: log in, create/link the app, pick a dev store
-```
-When the CLI asks, choose **Create a new app** and name it `GrowthLife Product Importer`. The scopes are already in `shopify.app.toml`.
-
-To use it on a live store (not a dev store), deploy it (for example to Render, Railway or Fly.io; there is a `Dockerfile`), set `SHOPIFY_APP_URL`, run `npm run deploy`, then install it with **Custom distribution** from the Partner Dashboard / Dev Dashboard.
-
-## Checks
-```bash
-npm test             # spreadsheet mapping, xlsx/csv round-trip, pasted-image detection
-npm run typecheck
-npm run lint
-npm run build
+npm test        # spreadsheet mapping, xlsx/csv round-trip, pasted pictures
+npm run build   # typecheck + production build into dist/
 ```
 
 ## Code map
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `app/lib/model.ts` | Product draft model, variant generation, completeness rules |
-| `app/lib/sheet.ts` | Column definitions and help text; rows ⇄ products |
-| `app/lib/xlsx.server.ts` | Excel/CSV writer and reader (including embedded pictures) |
-| `app/lib/shopify-products.server.ts` | Admin GraphQL (2025-10): list, load, `productSet` save, stock, collections, publish, uploads |
-| `app/routes/app._index.tsx` | All-products page |
-| `app/components/ProductEditor.tsx` | Single-click popup editor |
-| `app/routes/app.import.tsx` / `app.export.tsx` / `app.images.tsx` | Import, export and bulk images pages |
-| `app/routes/app.api.*.tsx` | JSON/file endpoints used by the pages |
+| `src/lib/shopify.ts` | Admin GraphQL (2025-10) via direct API access: list, load, `productSet` save, stock, collections, publish, uploads |
+| `src/lib/actions.ts` | Import / export / save / upload flows used by the pages |
+| `src/lib/sheet.ts` | Column definitions + help text; rows ⇄ products |
+| `src/lib/xlsx.ts` | Excel/CSV writer and reader (including embedded pictures) |
+| `src/lib/model.ts` | Product model, variant generation, completeness rules |
+| `src/pages/*` | All Products, Import, Export, Bulk Image Upload |
+| `src/components/ProductEditor.tsx` | Single-click popup editor |
