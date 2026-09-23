@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { rowsToDrafts, draftsToRows, SAMPLE_ROWS } from "../app/lib/sheet";
-import { buildWorkbook, readWorkbook, buildCsv, readCsv } from "../app/lib/xlsx.server";
-import { regenerateVariants, checkCompleteness } from "../app/lib/model";
+import { rowsToDrafts, draftsToRows, SAMPLE_ROWS } from "../src/lib/sheet";
+import { buildWorkbook, readWorkbook, buildCsv, readCsv } from "../src/lib/xlsx";
+import { regenerateVariants, checkCompleteness } from "../src/lib/model";
 import ExcelJS from "exceljs";
 
 describe("rowsToDrafts", () => {
@@ -105,7 +105,7 @@ describe("model helpers", () => {
   });
 });
 
-import { matchKeyFromFilename } from "../app/lib/filename";
+import { matchKeyFromFilename } from "../src/lib/filename";
 describe("image file names", () => {
   it("strips numbering suffixes", () => {
     expect(matchKeyFromFilename("red-shirt_2.jpg")).toBe("red-shirt");
