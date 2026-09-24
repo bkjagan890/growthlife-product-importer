@@ -114,3 +114,27 @@ describe("image file names", () => {
     expect(matchKeyFromFilename("steel-hammer-500g.jpg")).toBe("steel-hammer-500g");
   });
 });
+
+import { applyReport } from "../src/lib/actions";
+import { auditForAds, draftToSummary } from "../src/lib/model";
+describe("reports", () => {
+  const base = rowsToDrafts(SAMPLE_ROWS).drafts;
+  it("flags ads problems", () => {
+    const hammer = base[1];
+    const a = auditForAds(hammer);
+    expect(a.ready).toBe(false);
+    expect(a.critical.join()).toMatch(/draft/);
+    expect(a.critical.join()).toMatch(/Description too short/);
+    expect(a.critical.join()).toMatch(/No attributes/);
+    const shirt = { ...base[0], descriptionHtml: "<p>" + "Soft cotton ".repeat(12) + "</p>" };
+    expect(auditForAds(shirt).ready).toBe(true);
+  });
+  it("splits products into the three reports", () => {
+    const noImg = { ...base[1], handle: "no-img", images: [] };
+    const all = [base[0], base[1], noImg];
+    expect(applyReport(all, "no-images").map((r) => r.draft.handle)).toEqual(["no-img"]);
+    expect(applyReport(all, "complete").map((r) => r.draft.handle)).toEqual(["classic-cotton-tshirt"]);
+    expect(applyReport(all, "ads").map((r) => r.draft.handle)).toEqual(["classic-cotton-tshirt", "steel-hammer-500g", "no-img"]);
+    expect(draftToSummary(base[0]).totalInventory).toBe(40);
+  });
+});
