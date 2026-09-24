@@ -21,8 +21,9 @@ export default function App() {
   const [page, setPage] = useState<Page>(initialPage);
   const insideShopify = typeof window !== "undefined" && !!(window as any).shopify && window.top !== window.self;
 
+  // Note: never touch history/location here. Inside the Shopify admin, App Bridge syncs the
+  // iframe URL with the admin and a URL change reloads the app.
   useEffect(() => {
-    history.replaceState(null, "", `${location.pathname}${location.search}#${page}`);
     window.scrollTo(0, 0);
   }, [page]);
 
