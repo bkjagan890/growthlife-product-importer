@@ -19,6 +19,7 @@ export interface ExportOptions {
   /** optional thumbnail per spreadsheet data-row index */
   thumbnails?: (Uint8Array | null | undefined)[];
   template?: boolean;
+  reportName?: string;
 }
 
 export async function buildWorkbook(opts: ExportOptions): Promise<Uint8Array> {
@@ -33,7 +34,7 @@ export async function buildWorkbook(opts: ExportOptions): Promise<Uint8Array> {
   // Row 1: title banner
   ws.mergeCells(1, 1, 1, COLUMNS.length);
   const title = ws.getCell(1, 1);
-  title.value = `${APP_NAME} — ${opts.template ? "Blank import template" : "Product export"}${
+  title.value = `${APP_NAME} — ${opts.template ? "Blank import template" : opts.reportName ?? "Product export"}${
     opts.shopName ? ` (${opts.shopName})` : ""
   } — ${new Date().toISOString().slice(0, 10)}`;
   title.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };

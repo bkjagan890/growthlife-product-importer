@@ -162,7 +162,7 @@ export function checkCompleteness(p: ProductSummary): CompletenessResult {
     ["Description", p.hasDescription],
     ["Image", p.imageCount > 0],
     ["Price", !!p.priceMin && Number(p.priceMin) > 0],
-    ["Sale/MRP price", !!p.compareAt && Number(p.compareAt) > 0],
+    ["MRP (higher than sale price)", !!p.compareAt && Number(p.compareAt) > Number(p.priceMin ?? 0)],
     ["SKU", !p.skuMissing],
     ["Stock quantity", p.totalInventory !== null && p.totalInventory > 0],
     ["Vendor", !!p.vendor?.trim()],
@@ -178,4 +178,78 @@ export function checkCompleteness(p: ProductSummary): CompletenessResult {
     score: Math.round(((checks.length - missing.length) / checks.length) * 100),
     missing,
   };
+}
+
+// ------------------------------------------------------------------ audits on full product data
+
+const plainText = (html?: string) => (html ?? "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+
+/** Turn a full product draft into the summary used by the grid (same completeness rules). */
+export function draftToSummary(d: ProductDraft): ProductSummary {
+  const prices = d.variants.map((v) => Number(v.price)).filter((n) => !isNaN(n));
+  const compare = d.variants.map((v) => Number(v.compareAtPrice)).filter((n) => !isNaN(n) && n > 0);
+  const tracked = d.variants.filter((v) => v.quantity !== null && v.quantity !== undefined);
+  return {
+    id: d.id ?? "",
+    handle: d.handle,
+    title: d.title,
+    status: d.status,
+    vendor: d.vendor ?? "",
+    productType: d.productType ?? "",
+    tags: d.tags,
+    imageCount: d.images.length,
+    hasDescription: !!plainText(d.descriptionHtml),
+    seoTitle: d.seoTitle,
+    seoDescription: d.seoDescription,
+    collectionsCount: d.collections.length,
+    variantsCount: d.variants.length,
+    priceMin: prices.length ? String(Math.min(...prices)) : undefined,
+    priceMax: prices.length ? String(Math.max(...prices)) : undefined,
+    compareAt: compare.length ? String(Math.max(...compare)) : undefined,
+    totalInventory: tracked.length ? tracked.reduce((s, v) => s + Number(v.quantity || 0), 0) : null,
+    skuMissing: d.variants.some((v) => !v.sku?.trim()),
+    updatedAt: "",
+  };
+}
+
+export interface AdsAudit {
+  ready: boolean;
+  critical: string[]; // blocks good ads / shopping feeds
+  recommended: string[]; // improves ads quality
+}
+
+/** What is missing for running ads / Google Shopping / Meta catalog on this product. */
+export function auditForAds(d: ProductDraft): AdsAudit {
+  const critical: string[] = [];
+  const recommended: string[] = [];
+  const text = plainText(d.descriptionHtml);
+  const prices = d.variants.map((v) => Number(v.price) || 0);
+  const realOptions = d.options.filter((o) => !(o.name === DEFAULT_OPTION && o.values.length <= 1));
+  const attributes = d.metafields.filter((m) => m.value?.trim() && !m.namespace.startsWith("global") && !m.namespace.startsWith("shopify"));
+
+  if (d.status !== "ACTIVE") critical.push(`Status is ${d.status.toLowerCase()} (not live)`);
+  if (d.title.trim().length < 15) critical.push("Title too short (under 15 characters)");
+  if (!text) critical.push("Description missing");
+  else if (text.length < 100) critical.push(`Description too short (${text.length} characters, need 100+)`);
+  if (d.images.length === 0) critical.push("No images");
+  if (prices.some((p) => p <= 0)) critical.push("Price is 0 on some variant");
+  const stockOk = d.variants.some((v) => v.quantity === null || v.quantity === undefined || Number(v.quantity) > 0 || v.continueSellingWhenOutOfStock);
+  if (!stockOk) critical.push("Out of stock");
+  if (d.variants.some((v) => !v.sku?.trim())) critical.push("SKU missing");
+  if (!d.vendor?.trim()) critical.push("Brand / vendor missing");
+  if (!d.productType?.trim()) critical.push("Product type / category missing");
+  if (!realOptions.length && !attributes.length) critical.push("No attributes (no variants/options and no metafields like material, size, colour)");
+  if (d.variants.some((v) => v.compareAtPrice && Number(v.compareAtPrice) > 0 && Number(v.compareAtPrice) < Number(v.price)))
+    critical.push("MRP lower than sale price (wrong discount)");
+
+  if (d.images.length > 0 && d.images.length < 3) recommended.push(`Only ${d.images.length} image(s), 3+ recommended`);
+  if (d.variants.some((v) => !v.barcode?.trim())) recommended.push("Barcode / GTIN missing");
+  if (!d.variants.some((v) => v.compareAtPrice && Number(v.compareAtPrice) > Number(v.price))) recommended.push("No MRP / discount shown");
+  if (!d.seoTitle?.trim()) recommended.push("SEO title missing");
+  if (!d.seoDescription?.trim()) recommended.push("SEO description missing");
+  if (!d.collections.length) recommended.push("Not in any collection");
+  if (!d.tags.length) recommended.push("No tags");
+  if (d.images.some((im) => !im.alt?.trim())) recommended.push("Image alt text missing");
+
+  return { ready: critical.length === 0, critical, recommended };
 }

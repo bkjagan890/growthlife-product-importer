@@ -14,7 +14,7 @@ import {
   type SaveContext,
   type SaveResult,
 } from "./shopify";
-import type { ProductDraft, ProductSummary } from "./model";
+import { auditForAds, checkCompleteness, draftToSummary, type ProductDraft, type ProductSummary } from "./model";
 import { draftsToRows, rowsToDrafts, type RowIssue } from "./sheet";
 import { buildCsv, buildWorkbook, readCsv, readWorkbook } from "./xlsx";
 
@@ -71,7 +71,31 @@ export interface ExportRequest {
   thumbs?: boolean;
   template?: boolean;
   shopName?: string;
+  /** report exports: only products that are complete / have no images / are not ready for ads */
+  report?: ReportType;
   onProgress?: (n: number) => void;
+}
+
+export type ReportType = "complete" | "no-images" | "ads";
+
+export const REPORTS: Record<ReportType, { label: string; file: string }> = {
+  complete: { label: "Complete products (everything filled)", file: "complete-products" },
+  "no-images": { label: "Products with missing images", file: "missing-images" },
+  ads: { label: "Not ready for ads (sales essentials missing)", file: "not-ads-ready" },
+};
+
+/** Keep only the products a report wants and describe what is missing on each. */
+export function applyReport(drafts: ProductDraft[], report: ReportType) {
+  const out: { draft: ProductDraft; note: string }[] = [];
+  for (const d of drafts) {
+    const c = checkCompleteness(draftToSummary(d));
+    const ads = auditForAds(d);
+    if (report === "complete" && c.complete) out.push({ draft: d, note: "✓ Complete" + (ads.ready ? " · ready for ads" : ` · for ads: ${ads.critical.join("; ")}`) });
+    if (report === "no-images" && d.images.length === 0) out.push({ draft: d, note: `No images${c.missing.length > 1 ? ` · also missing: ${c.missing.filter((m) => m !== "Image").join(", ")}` : ""}` });
+    if (report === "ads" && !ads.ready)
+      out.push({ draft: d, note: `MUST FIX: ${ads.critical.join("; ")}${ads.recommended.length ? ` | IMPROVE: ${ads.recommended.join("; ")}` : ""}` });
+  }
+  return out;
 }
 
 export async function exportProducts(req: ExportRequest) {
@@ -92,16 +116,25 @@ export async function exportProducts(req: ExportRequest) {
     drafts.push(d);
     req.onProgress?.(drafts.length);
   }
-  const rows = draftsToRows(drafts);
+  let selected = drafts;
+  const notes = new Map<string, string>();
+  if (req.report) {
+    const picked = applyReport(drafts, req.report);
+    selected = picked.map((p) => p.draft);
+    for (const p of picked) notes.set(p.draft.handle, p.note);
+  }
+  const rows = draftsToRows(selected);
+  if (notes.size) for (const r of rows) if (r.title !== undefined && notes.has(r.handle)) r.report = notes.get(r.handle)!;
+  const base = req.report ? `${REPORTS[req.report].file}-${shop}` : `products-${shop}`;
   if (req.format === "csv") {
-    return saveBlob(new Blob(["﻿" + buildCsv(rows)], { type: "text/csv;charset=utf-8" }), `products-${shop}-${stamp}.csv`);
+    return saveBlob(new Blob(["\uFEFF" + buildCsv(rows)], { type: "text/csv;charset=utf-8" }), `${base}-${stamp}.csv`);
   }
   let thumbnails: (Uint8Array | null)[] | undefined;
   if (req.thumbs) {
     thumbnails = new Array(rows.length).fill(null);
     let rowIdx = 0;
     const jobs: Promise<void>[] = [];
-    for (const d of drafts) {
+    for (const d of selected) {
       const idx = rowIdx;
       const img = d.images[0]?.src;
       if (img) {
@@ -118,8 +151,8 @@ export async function exportProducts(req: ExportRequest) {
     }
     await Promise.all(jobs);
   }
-  const buf = await buildWorkbook({ rows, shopName: shop, thumbnails });
-  return saveBlob(new Blob([buf as any], { type: XLSX_MIME }), `products-${shop}-${stamp}.xlsx`);
+  const buf = await buildWorkbook({ rows, shopName: shop, thumbnails, reportName: req.report ? `${REPORTS[req.report].label} — ${selected.length} of ${drafts.length} products` : undefined });
+  return saveBlob(new Blob([buf as any], { type: XLSX_MIME }), `${base}-${stamp}.xlsx`);
 }
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

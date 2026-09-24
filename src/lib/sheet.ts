@@ -25,6 +25,8 @@ export const COLUMNS: ColumnDef[] = [
     help: "REQUIRED. Unique product URL id, e.g. red-cotton-tshirt. Same handle on several rows = one product with several variants. Existing handle = update, new handle = create." },
   { key: "title", header: "Title", level: "product", width: 34, required: true,
     help: "REQUIRED on first row of the product. Product name." },
+  { key: "report", header: "Missing / Issues (info only)", level: "product", width: 46,
+    help: "Filled by report exports: what is missing on this product. Ignored on import, you can leave it." },
   { key: "description", header: "Description (HTML)", level: "product", width: 44,
     help: "Product description. Plain text or HTML like <p>Soft cotton</p><ul><li>Point</li></ul>." },
   { key: "vendor", header: "Vendor / Brand", level: "product", width: 18, help: "Brand or manufacturer name." },
