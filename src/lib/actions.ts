@@ -98,6 +98,29 @@ export function applyReport(drafts: ProductDraft[], report: ReportType) {
   return out;
 }
 
+/** Scan the store once and download several report files. */
+export async function exportReports(reports: ReportType[], onProgress?: (n: number) => void) {
+  const drafts: ProductDraft[] = [];
+  for await (const d of iterateAllDrafts(admin)) {
+    drafts.push(d);
+    onProgress?.(drafts.length);
+  }
+  const shop = shopName();
+  const stamp = new Date().toISOString().slice(0, 10);
+  const summary: { report: ReportType; count: number; file: string }[] = [];
+  for (const report of reports) {
+    const picked = applyReport(drafts, report);
+    const rows = draftsToRows(picked.map((p) => p.draft));
+    const notes = new Map(picked.map((p) => [p.draft.handle, p.note]));
+    for (const r of rows) if (r.title !== undefined && notes.has(r.handle)) r.report = notes.get(r.handle)!;
+    const buf = await buildWorkbook({ rows, shopName: shop, reportName: `${REPORTS[report].label} — ${picked.length} of ${drafts.length} products` });
+    const file = saveBlob(new Blob([buf as any], { type: XLSX_MIME }), `${REPORTS[report].file}-${shop}-${stamp}.xlsx`);
+    summary.push({ report, count: picked.length, file });
+    await new Promise((r) => setTimeout(r, 1200)); // let the browser start each download
+  }
+  return { total: drafts.length, summary };
+}
+
 export async function exportProducts(req: ExportRequest) {
   const stamp = new Date().toISOString().slice(0, 10);
   const shop = req.shopName ?? shopName();
