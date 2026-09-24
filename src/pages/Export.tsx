@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "../lib/client";
-import { exportProducts } from "../lib/actions";
+import { exportProducts, REPORTS, type ReportType } from "../lib/actions";
 
 export default function ExportPage() {
   const [format, setFormat] = useState<"xlsx" | "csv">("xlsx");
@@ -10,11 +10,14 @@ export default function ExportPage() {
   const [busy, setBusy] = useState(false);
   const [count, setCount] = useState(0);
 
-  async function run(template = false) {
+  const [report, setReport] = useState<ReportType | "">("");
+
+  async function run(template = false, onlyReport?: ReportType) {
     setBusy(true);
     try {
       setCount(0);
-      const name = await exportProducts({ format, status, template, q: q.trim() || undefined, thumbs: thumbs && format === "xlsx", onProgress: setCount });
+      const r = onlyReport ?? (report || undefined);
+      const name = await exportProducts({ format, status, template, q: q.trim() || undefined, thumbs: thumbs && format === "xlsx", onProgress: setCount, report: r });
       toast(`Downloaded ${name}`);
     } catch (e: any) {
       toast(e.message, true);
@@ -32,7 +35,7 @@ export default function ExportPage() {
           tags, collections, SEO meta, metafields and image URLs. The top rows explain what each column means, so you can fill
           the file and import it back.
         </p>
-        <div className="gl-grid3">
+        <div className="gl-grid2">
           <div className="gl-field">
             <span className="gl-label">File format</span>
             <select className="gl-select" value={format} onChange={(e) => setFormat(e.target.value as any)}>
@@ -47,6 +50,13 @@ export default function ExportPage() {
               <option value="active">Active only</option>
               <option value="draft">Draft only</option>
               <option value="archived">Archived only</option>
+            </select>
+          </div>
+          <div className="gl-field">
+            <span className="gl-label">Report</span>
+            <select className="gl-select" value={report} onChange={(e) => setReport(e.target.value as any)}>
+              <option value="">No report (all matching products)</option>
+              {(Object.keys(REPORTS) as ReportType[]).map((k) => <option key={k} value={k}>{REPORTS[k].label}</option>)}
             </select>
           </div>
           <div className="gl-field">
@@ -65,6 +75,21 @@ export default function ExportPage() {
             {busy ? <><span className="gl-spinner" /> Preparing file… {count > 0 ? `${count} products` : ""}</> : `⬇ Export ${format.toUpperCase()}`}
           </button>
           <button className="gl-btn" disabled={busy} onClick={() => run(true)}>⬇ Blank template with examples</button>
+        </div>
+      </div>
+
+      <div className="gl-card">
+        <h2>Quick reports</h2>
+        <p className="gl-muted" style={{ marginTop: 0 }}>
+          Each file has a "Missing / Issues" column saying what to fill. Fill the gaps in Excel and import the same file back.
+        </p>
+        <div className="gl-steps">
+          <div className="gl-step"><b>✓ Complete products</b>Every field filled: description, images, price and MRP, SKU, stock, brand, type, tags, collection, SEO.
+            <div style={{ marginTop: 8 }}><button className="gl-btn" disabled={busy} onClick={() => run(false, "complete")}>⬇ Download</button></div></div>
+          <div className="gl-step"><b>🖼 Missing images</b>Products with no image at all.
+            <div style={{ marginTop: 8 }}><button className="gl-btn" disabled={busy} onClick={() => run(false, "no-images")}>⬇ Download</button></div></div>
+          <div className="gl-step"><b>📣 Not ready for ads</b>Missing sales essentials: description (100+ chars), images, price, stock, SKU, brand, type, attributes/variants, correct MRP, live status.
+            <div style={{ marginTop: 8 }}><button className="gl-btn" disabled={busy} onClick={() => run(false, "ads")}>⬇ Download</button></div></div>
         </div>
       </div>
     </div>
