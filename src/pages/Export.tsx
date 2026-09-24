@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "../lib/client";
-import { exportProducts, REPORTS, type ReportType } from "../lib/actions";
+import { exportProducts, exportReports, REPORTS, type ReportType } from "../lib/actions";
 
 export default function ExportPage() {
   const [format, setFormat] = useState<"xlsx" | "csv">("xlsx");
@@ -11,6 +11,22 @@ export default function ExportPage() {
   const [count, setCount] = useState(0);
 
   const [report, setReport] = useState<ReportType | "">("");
+  const [lastRun, setLastRun] = useState<string>("");
+
+  async function runAll() {
+    setBusy(true);
+    setCount(0);
+    try {
+      const res = await exportReports(["complete", "no-images", "ads"], setCount);
+      const text = res.summary.map((s) => `${REPORTS[s.report].label}: ${s.count}`).join(" · ");
+      setLastRun(`Scanned ${res.total} products → ${text}`);
+      toast("3 report files downloaded");
+    } catch (e: any) {
+      toast(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function run(template = false, onlyReport?: ReportType) {
     setBusy(true);
@@ -83,6 +99,12 @@ export default function ExportPage() {
         <p className="gl-muted" style={{ marginTop: 0 }}>
           Each file has a "Missing / Issues" column saying what to fill. Fill the gaps in Excel and import the same file back.
         </p>
+        <div style={{ marginBottom: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <button className="gl-btn primary" disabled={busy} onClick={runAll}>
+            {busy ? <><span className="gl-spinner" /> Scanning… {count > 0 ? `${count} products` : ""}</> : "⬇ Download all 3 reports (one scan)"}
+          </button>
+          {lastRun && <span className="gl-ok">{lastRun}</span>}
+        </div>
         <div className="gl-steps">
           <div className="gl-step"><b>✓ Complete products</b>Every field filled: description, images, price and MRP, SKU, stock, brand, type, tags, collection, SEO.
             <div style={{ marginTop: 8 }}><button className="gl-btn" disabled={busy} onClick={() => run(false, "complete")}>⬇ Download</button></div></div>

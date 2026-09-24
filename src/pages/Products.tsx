@@ -18,6 +18,7 @@ export default function ProductsPage() {
   const [missingFilter, setMissingFilter] = useState("");
   const [editing, setEditing] = useState<string | null | undefined>(undefined); // undefined = closed, null = new
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [limit, setLimit] = useState(100); // rows rendered at once (keeps big stores fast)
   const [exporting, setExporting] = useState(false);
   const loadId = useRef(0);
 
@@ -75,6 +76,7 @@ export default function ProductsPage() {
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [searched]);
 
+  useEffect(() => setLimit(100), [search, tab, missingFilter]); // eslint-disable-line react-hooks/set-state-in-effect
   const visible = useMemo(
     () =>
       searched.filter(({ p, c }) => {
@@ -194,7 +196,7 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {visible.map(({ p, c }) => (
+              {visible.slice(0, limit).map(({ p, c }) => (
                 <tr key={p.id} onClick={() => setEditing(p.id)}>
                   <td onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} aria-label={`Select ${p.title}`} />
@@ -232,6 +234,13 @@ export default function ProductsPage() {
               ))}
             </tbody>
           </table>
+          {visible.length > limit && (
+            <div style={{ textAlign: "center", padding: 12 }}>
+              <span className="gl-muted">Showing {limit} of {visible.length}. </span>
+              <button className="gl-btn" onClick={() => setLimit((l) => l + 200)}>Show 200 more</button>{" "}
+              <button className="gl-btn" onClick={() => setLimit(visible.length)}>Show all</button>
+            </div>
+          )}
           {!loading && visible.length === 0 && (
             <div className="gl-empty">{products.length ? "No products match this search or tab." : "No products yet. Add one or import an Excel file."}</div>
           )}
